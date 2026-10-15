@@ -1,0 +1,5 @@
+{
+  "name": "smartbank-vitest", "version": "1.0.0", "private": true, "type": "module",
+  "scripts": {"test": "vitest", "test:run": "vitest run", "coverage": "vitest run --coverage", "typecheck": "tsc --noEmit", "dev": "tsx src/main.ts"},
+  "devDependencies": {"@types/node": "^22.0.0", "@vitest/coverage-v8": "^3.0.0", "tsx": "^4.0.0", "typescript": "^5.0.0", "vitest": "^3.0.0"}
+}
