@@ -41,4 +41,47 @@ describe('SmartBank HTTP - integração', () => {
     const response = await json('GET', '/nada');
     expect(response.status).toBe(404);
   });
+  it('retorna 400 em corpo JSON que não é objeto', async () => {
+    const response = await json('POST', '/accounts', [1, 2]);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'INVALID_JSON' });
+  });
+  it('retorna 400 em conta com campos inválidos', async () => {
+    const response = await json('POST', '/accounts', { id: 1, owner: 'Ana' });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'INVALID_ACCOUNT' });
+  });
+  it('faz saque via API e valida o valor', async () => {
+    await json('POST', '/accounts', { id: 'A', owner: 'Ana' });
+    await json('POST', '/accounts/A/deposit', { amountCents: 500 });
+    const withdraw = await json('POST', '/accounts/A/withdraw', { amountCents: 200 });
+    expect(withdraw.status).toBe(200);
+    expect((await withdraw.json()).balanceCents).toBe(300);
+    const invalid = await json('POST', '/accounts/A/withdraw', { amountCents: '200' });
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toEqual({ error: 'INVALID_AMOUNT' });
+  });
+  it('retorna 404 e 409 em erros de negócio', async () => {
+    await json('POST', '/accounts', { id: 'A', owner: 'Ana' });
+    expect((await json('GET', '/accounts/X')).status).toBe(404);
+    const insufficient = await json('POST', '/accounts/A/withdraw', { amountCents: 100 });
+    expect(insufficient.status).toBe(409);
+    expect(await insufficient.json()).toEqual({ error: 'INSUFFICIENT_FUNDS' });
+  });
+  it('retorna 400 em transferência com corpo inválido', async () => {
+    const response = await json('POST', '/transfers', { from: 'A', to: 'B', amountCents: 'x' });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'INVALID_ACCOUNT' });
+  });
+  it('oculta erros inesperados como INTERNAL_ERROR (500)', async () => {
+    const failing = createBankServer(new BankService({ get: async () => { throw new Error('DB_DOWN'); }, save: async () => undefined }, { log: async () => undefined }));
+    await new Promise<void>(resolve => failing.listen(0, '127.0.0.1', resolve));
+    try {
+      const response = await fetch(`http://127.0.0.1:${(failing.address() as AddressInfo).port}/accounts/A`);
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({ error: 'INTERNAL_ERROR' });
+    } finally {
+      await new Promise<void>(resolve => failing.close(() => resolve()));
+    }
+  });
 });
